@@ -59,7 +59,9 @@
 
 		<Directory Id="TARGETDIR" Name="SourceDir">
 			<Directory Id="$(var.PlatformProgramFilesFolder)">
-				<Directory Id="WireGuardFolder" Name="MyAmneziaWG" />
+				<Directory Id="WireGuardFolder" Name="MyAmneziaWG">
+					<Directory Id="DataFolder" Name="Data" />
+				</Directory>
 			</Directory>
 			<Directory Id="ProgramMenuFolder" />
 		</Directory>
@@ -76,6 +78,9 @@
 			</Component>
 			<Component Directory="WireGuardFolder" Id="WintunLibrary" Guid="a6b4cb13-8946-408f-aa03-2cfabae368a4">
 				<File Source="..\$(var.WIREGUARD_PLATFORM)\wintun.dll" KeyPath="yes" />
+			</Component>
+			<Component Directory="DataFolder" Id="DataFolderComponent" Guid="8c8e1f6f-2a9e-4b5f-8f13-2f2a7f1b6a41">
+				<CreateFolder />
 			</Component>
 		</ComponentGroup>
 
