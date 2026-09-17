@@ -96,7 +96,7 @@ func svcStateToNotifyState(s uint32) uint32 {
 	}
 }
 
-func notifyStateToTunState(s uint32) uint32 {
+func notifyStateToTunState(s uint32) TunnelState {
 	if s&(windows.SERVICE_NOTIFY_STOPPED|windows.SERVICE_NOTIFY_DELETED) != 0 {
 		return TunnelStopped
 	} else if s&(windows.SERVICE_NOTIFY_DELETE_PENDING|windows.SERVICE_NOTIFY_STOP_PENDING) != 0 {
