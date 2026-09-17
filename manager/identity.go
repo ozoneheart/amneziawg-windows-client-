@@ -20,7 +20,7 @@ const (
     ManagerServiceName  = "MyAmneziaWGManager"
     TunnelServicePrefix = "MyAmneziaWGTunnel$"
 
-    tunnelNamePrefix = "MyAmneziaWG-"
+    tunnelNamePrefix = "M-"
     adminRegKey      = `Software\MyAmneziaWG`
 )
 
