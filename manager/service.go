@@ -304,7 +304,7 @@ loop:
 				}
 				sessionNotification := (*windows.WTSSESSION_NOTIFICATION)(unsafe.Pointer(c.EventData))
 				if uintptr(sessionNotification.Size) != unsafe.Sizeof(*sessionNotification) {
-					log.Printf("Unexpected size of WTSSESSION_NOTIFICATION: %d", sessionNotification.Size)
+					log.Printf("Unexpected size of WTS_SESSION_NOTIFICATION: %d", sessionNotification.Size)
 					continue
 				}
 				if c.EventType == windows.WTS_SESSION_LOGOFF {
@@ -350,7 +350,7 @@ loop:
 }
 
 func Run() error {
-	return svc.Run("AmneziaWGManager", &managerService{})
+	return svc.Run(ManagerServiceName, &managerService{})
 }
 
 func LogFile(createRoot bool) (string, error) {
