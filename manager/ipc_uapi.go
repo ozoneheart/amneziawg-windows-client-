@@ -24,8 +24,9 @@ var connectedTunnelServicePipes = make(map[string]*connectedTunnel)
 var connectedTunnelServicePipesLock sync.RWMutex
 
 func connectTunnelServicePipe(tunnelName string) (*connectedTunnel, error) {
+	internalName := internalTunnelName(tunnelName)
 	connectedTunnelServicePipesLock.RLock()
-	pipe, ok := connectedTunnelServicePipes[tunnelName]
+	pipe, ok := connectedTunnelServicePipes[internalName]
 	if ok {
 		pipe.Lock()
 		connectedTunnelServicePipesLock.RUnlock()
@@ -34,12 +35,12 @@ func connectTunnelServicePipe(tunnelName string) (*connectedTunnel, error) {
 	connectedTunnelServicePipesLock.RUnlock()
 	connectedTunnelServicePipesLock.Lock()
 	defer connectedTunnelServicePipesLock.Unlock()
-	pipe, ok = connectedTunnelServicePipes[tunnelName]
+	pipe, ok = connectedTunnelServicePipes[internalName]
 	if ok {
 		pipe.Lock()
 		return pipe, nil
 	}
-	pipePath, err := services.PipePathOfTunnel(tunnelName)
+	pipePath, err := services.PipePathOfTunnel(internalName)
 	if err != nil {
 		return nil, err
 	}
@@ -53,20 +54,21 @@ func connectTunnelServicePipe(tunnelName string) (*connectedTunnel, error) {
 	if err != nil {
 		return nil, err
 	}
-	connectedTunnelServicePipes[tunnelName] = pipe
+	connectedTunnelServicePipes[internalName] = pipe
 	pipe.Lock()
 	return pipe, nil
 }
 
 func disconnectTunnelServicePipe(tunnelName string) {
+	internalName := internalTunnelName(tunnelName)
 	connectedTunnelServicePipesLock.Lock()
 	defer connectedTunnelServicePipesLock.Unlock()
-	pipe, ok := connectedTunnelServicePipes[tunnelName]
+	pipe, ok := connectedTunnelServicePipes[internalName]
 	if !ok {
 		return
 	}
 	pipe.Lock()
 	pipe.Close()
-	delete(connectedTunnelServicePipes, tunnelName)
+	delete(connectedTunnelServicePipes, internalName)
 	pipe.Unlock()
 }

@@ -21,7 +21,6 @@ import (
 
 	"github.com/amnezia-vpn/amneziawg-windows-client/updater"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
-	"github.com/amnezia-vpn/amneziawg-windows/v3/services"
 )
 
 var (
@@ -38,22 +37,25 @@ type ManagerService struct {
 }
 
 func (s *ManagerService) StoredConfig(tunnelName string) (*conf.Config, error) {
-	conf, err := conf.LoadFromName(tunnelName)
+	internalName := internalTunnelName(tunnelName)
+	config, err := conf.LoadFromName(internalName)
 	if err != nil {
 		return nil, err
 	}
+	config.Name = externalTunnelName(config.Name)
 	if s.elevatedToken == 0 {
-		conf.Redact()
+		config.Redact()
 	}
-	return conf, nil
+	return config, nil
 }
 
 func (s *ManagerService) RuntimeConfig(tunnelName string) (*conf.Config, error) {
-	storedConfig, err := conf.LoadFromName(tunnelName)
+	internalName := internalTunnelName(tunnelName)
+	storedConfig, err := conf.LoadFromName(internalName)
 	if err != nil {
 		return nil, err
 	}
-	pipe, err := connectTunnelServicePipe(tunnelName)
+	pipe, err := connectTunnelServicePipe(internalName)
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +64,8 @@ func (s *ManagerService) RuntimeConfig(tunnelName string) (*conf.Config, error) 
 	if err == windows.ERROR_NO_DATA {
 		log.Println("IPC pipe closed unexpectedly, so reopening")
 		pipe.Unlock()
-		disconnectTunnelServicePipe(tunnelName)
-		pipe, err = connectTunnelServicePipe(tunnelName)
+		disconnectTunnelServicePipe(internalName)
+		pipe, err = connectTunnelServicePipe(internalName)
 		if err != nil {
 			return nil, err
 		}
@@ -72,34 +74,34 @@ func (s *ManagerService) RuntimeConfig(tunnelName string) (*conf.Config, error) 
 	}
 	if err != nil {
 		pipe.Unlock()
-		disconnectTunnelServicePipe(tunnelName)
+		disconnectTunnelServicePipe(internalName)
 		return nil, err
 	}
-	conf, err := conf.FromUAPI(pipe, storedConfig)
+	config, err := conf.FromUAPI(pipe, storedConfig)
 	pipe.Unlock()
 	if err != nil {
 		return nil, err
 	}
+	config.Name = externalTunnelName(config.Name)
 	if s.elevatedToken == 0 {
-		conf.Redact()
+		config.Redact()
 	}
-	return conf, nil
+	return config, nil
 }
 
 func (s *ManagerService) Start(tunnelName string) error {
-	c, err := conf.LoadFromName(tunnelName)
+	internalName := internalTunnelName(tunnelName)
+	c, err := conf.LoadFromName(internalName)
 	if err != nil {
 		return err
 	}
 
-	// Figure out which tunnels have intersecting addresses/routes and stop those.
 	trackedTunnelsLock.Lock()
 	tt := make([]string, 0, len(trackedTunnels))
 	var inTransition string
 	for t, state := range trackedTunnels {
 		c2, err := conf.LoadFromName(t)
 		if err != nil || !c.IntersectsWith(c2) {
-			// If we can't get the config, assume it doesn't intersect.
 			continue
 		}
 		tt = append(tt, t)
@@ -110,10 +112,9 @@ func (s *ManagerService) Start(tunnelName string) error {
 	}
 	trackedTunnelsLock.Unlock()
 	if len(inTransition) != 0 {
-		return fmt.Errorf("Please allow the tunnel ‘%s’ to finish activating", inTransition)
+		return fmt.Errorf("Please allow the tunnel ‘%s’ to finish activating", externalTunnelName(inTransition))
 	}
 
-	// Stop those intersecting tunnels asynchronously.
 	go func() {
 		for _, t := range tt {
 			s.Stop(t)
@@ -121,13 +122,12 @@ func (s *ManagerService) Start(tunnelName string) error {
 		for _, t := range tt {
 			state, err := s.State(t)
 			if err == nil && (state == TunnelStarted || state == TunnelStarting) {
-				log.Printf("[%s] Trying again to stop zombie tunnel", t)
+				log.Printf("[%s] Trying again to stop zombie tunnel", externalTunnelName(t))
 				s.Stop(t)
 				time.Sleep(time.Millisecond * 100)
 			}
 		}
 	}()
-	// After the stop process has begun, but before it's finished, we install the new one.
 	path, err := c.Path()
 	if err != nil {
 		return err
@@ -136,9 +136,9 @@ func (s *ManagerService) Start(tunnelName string) error {
 }
 
 func (s *ManagerService) Stop(tunnelName string) error {
-	err := UninstallTunnel(tunnelName)
+	err := UninstallTunnel(internalTunnelName(tunnelName))
 	if err == windows.ERROR_SERVICE_DOES_NOT_EXIST {
-		_, notExistsError := conf.LoadFromName(tunnelName)
+		_, notExistsError := conf.LoadFromName(internalTunnelName(tunnelName))
 		if notExistsError == nil {
 			return nil
 		}
@@ -147,7 +147,7 @@ func (s *ManagerService) Stop(tunnelName string) error {
 }
 
 func (s *ManagerService) WaitForStop(tunnelName string) error {
-	serviceName, err := services.ServiceNameOfTunnel(tunnelName)
+	serviceName, err := serviceNameOfTunnel(tunnelName)
 	if err != nil {
 		return err
 	}
@@ -174,11 +174,11 @@ func (s *ManagerService) Delete(tunnelName string) error {
 	if err != nil {
 		return err
 	}
-	return conf.DeleteName(tunnelName)
+	return conf.DeleteName(internalTunnelName(tunnelName))
 }
 
 func (s *ManagerService) State(tunnelName string) (TunnelState, error) {
-	serviceName, err := services.ServiceNameOfTunnel(tunnelName)
+	serviceName, err := serviceNameOfTunnel(tunnelName)
 	if err != nil {
 		return 0, err
 	}
@@ -217,13 +217,13 @@ func (s *ManagerService) Create(tunnelConfig *conf.Config) (*Tunnel, error) {
 	if s.elevatedToken == 0 {
 		return nil, windows.ERROR_ACCESS_DENIED
 	}
-	err := tunnelConfig.Save(true)
+	storedConfig := *tunnelConfig
+	storedConfig.Name = internalTunnelName(tunnelConfig.Name)
+	err := storedConfig.Save(true)
 	if err != nil {
 		return nil, err
 	}
 	return &Tunnel{tunnelConfig.Name}, nil
-	// TODO: handle already existing situation
-	// TODO: handle already running and existing situation
 }
 
 func (s *ManagerService) Tunnels() ([]Tunnel, error) {
@@ -233,10 +233,9 @@ func (s *ManagerService) Tunnels() ([]Tunnel, error) {
 	}
 	tunnels := make([]Tunnel, len(names))
 	for i := 0; i < len(tunnels); i++ {
-		tunnels[i].Name = names[i]
+		tunnels[i].Name = externalTunnelName(names[i])
 	}
 	return tunnels, nil
-	// TODO: account for running ones that aren't in the configuration store somehow
 }
 
 func (s *ManagerService) Quit(stopTunnelsOnQuit bool) (alreadyQuit bool, err error) {
@@ -247,7 +246,6 @@ func (s *ManagerService) Quit(stopTunnelsOnQuit bool) (alreadyQuit bool, err err
 		return true, nil
 	}
 
-	// Work around potential race condition of delivering messages to the wrong process by removing from notifications.
 	managerServicesLock.Lock()
 	s.eventLock.Lock()
 	s.events = nil
@@ -520,7 +518,7 @@ func errToString(err error) string {
 }
 
 func IPCServerNotifyTunnelChange(name string, state TunnelState, err error) {
-	notifyAll(TunnelChangeNotificationType, false, name, state, trackedTunnelsGlobalState(), errToString(err))
+	notifyAll(TunnelChangeNotificationType, false, externalTunnelName(name), state, trackedTunnelsGlobalState(), errToString(err))
 }
 
 func IPCServerNotifyTunnelsChange() {

@@ -12,12 +12,14 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/sys/windows"
 
+	"github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 	"github.com/amnezia-vpn/amneziawg-windows/v3/tunnel"
 
 	"github.com/amnezia-vpn/amneziawg-windows-client/elevate"
@@ -38,6 +40,14 @@ func setLogFile() {
 	} else {
 		log.SetOutput(os.NewFile(uintptr(logHandle), "stderr"))
 	}
+}
+
+func presetProductRoot() {
+	programFiles, err := windows.KnownFolderPath(windows.FOLDERID_ProgramFiles, windows.KF_FLAG_DEFAULT)
+	if err != nil {
+		fatalf("Unable to determine Program Files directory: %v", err)
+	}
+	conf.PresetRootDirectory(filepath.Join(programFiles, manager.ProductName, "Data"))
 }
 
 func fatal(v ...any) {
@@ -103,12 +113,11 @@ func checkForWow64() {
 		fatalf("Unable to determine whether the process is running under WOW64: %v", err)
 	}
 	if b {
-                fatalf("You must use the native version of AmneziaWG on this computer.")
+		fatalf("You must use the native version of AmneziaWG on this computer.")
 	}
 }
 
 func checkForAdminGroup() {
-	// This is not a security check, but rather a user-confusion one.
 	var processToken windows.Token
 	err := windows.OpenProcessToken(windows.CurrentProcess(), windows.TOKEN_QUERY|windows.TOKEN_DUPLICATE, &processToken)
 	if err != nil {
@@ -116,14 +125,14 @@ func checkForAdminGroup() {
 	}
 	defer processToken.Close()
 	if !elevate.TokenIsElevatedOrElevatable(processToken) {
-                fatalf("AmneziaWG may only be used by users who are a member of the Builtin %s group.", elevate.AdminGroupName())
+		fatalf("AmneziaWG may only be used by users who are a member of the Builtin %s group.", elevate.AdminGroupName())
 	}
 }
 
 func checkForAdminDesktop() {
 	adminDesktop, err := elevate.IsAdminDesktop()
 	if !adminDesktop && err == nil {
-                fatalf("AmneziaWG is running, but the UI is only accessible from desktops of the Builtin %s group.", elevate.AdminGroupName())
+		fatalf("AmneziaWG is running, but the UI is only accessible from desktops of the Builtin %s group.", elevate.AdminGroupName())
 	}
 }
 
@@ -137,7 +146,7 @@ func execElevatedManagerServiceInstaller() error {
 		return err
 	}
 	os.Exit(0)
-	return windows.ERROR_UNHANDLED_EXCEPTION // Not reached
+	return windows.ERROR_UNHANDLED_EXCEPTION
 }
 
 func pipeFromHandleArgument(handleStr string) (*os.File, error) {
@@ -154,6 +163,7 @@ func main() {
 	}
 
 	setLogFile()
+	presetProductRoot()
 	checkForWow64()
 
 	if len(os.Args) <= 1 {
@@ -182,7 +192,7 @@ func main() {
 		}
 		checkForAdminDesktop()
 		time.Sleep(30 * time.Second)
-                fatalf("AmneziaWG system tray icon did not appear after 30 seconds.")
+		fatalf("MyAmneziaWG system tray icon did not appear after 30 seconds.")
 		return
 	case "/uninstallmanagerservice":
 		if len(os.Args) != 2 {

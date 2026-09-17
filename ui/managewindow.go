@@ -29,7 +29,7 @@ type ManageTunnelsWindow struct {
 }
 
 const (
-	manageWindowWindowClass = "AmneziaWG UI - Manage Tunnels"
+	manageWindowWindowClass = "MyAmneziaWG UI - Manage Tunnels"
 	raiseMsg                = win.WM_USER + 0x3510
 	aboutWireGuardCmd       = 0x37
 )
@@ -56,7 +56,7 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 	}
 
 	mtw := new(ManageTunnelsWindow)
-	mtw.SetName("AmneziaWG")
+	mtw.SetName("MyAmneziaWG")
 
 	err = walk.InitWindow(mtw, nil, manageWindowWindowClass, win.WS_OVERLAPPEDWINDOW, win.WS_EX_CONTROLPARENT)
 	if err != nil {
@@ -69,7 +69,7 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 	if icon, err := loadLogoIcon(32); err == nil {
 		mtw.SetIcon(icon)
 	}
-	mtw.SetTitle("AmneziaWG")
+	mtw.SetTitle("MyAmneziaWG")
 	mtw.SetFont(font)
 	mtw.SetSize(walk.Size{675, 525})
 	mtw.SetMinMaxSize(walk.Size{500, 400}, walk.Size{0, 0})
@@ -77,7 +77,6 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 	vlayout.SetMargins(walk.Margins{5, 5, 5, 5})
 	mtw.SetLayout(vlayout)
 	mtw.Closing().Attach(func(canceled *bool, reason walk.CloseReason) {
-		// "Close to tray" instead of exiting application
 		*canceled = true
 		if !noTrayAvailable {
 			mtw.Hide()
@@ -118,9 +117,9 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 		win.InsertMenuItem(systemMenu, 0, true, &win.MENUITEMINFO{
 			CbSize:     uint32(unsafe.Sizeof(win.MENUITEMINFO{})),
 			FMask:      win.MIIM_ID | win.MIIM_STRING | win.MIIM_FTYPE,
-			FType:      win.MIIM_STRING,
-			DwTypeData: windows.StringToUTF16Ptr(l18n.Sprintf("&About AmneziaWG…")),
 			WID:        uint32(aboutWireGuardCmd),
+			FType:      win.MFT_STRING,
+			DwTypeData: windows.StringToUTF16Ptr(l18n.Sprintf("&About %s…", manager.ProductName)),
 		})
 		win.InsertMenuItem(systemMenu, 1, true, &win.MENUITEMINFO{
 			CbSize: uint32(unsafe.Sizeof(win.MENUITEMINFO{})),

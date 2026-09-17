@@ -131,17 +131,7 @@ func trackService(service *mgr.Service, callback func(status uint32) bool) error
 		return err
 	}
 
-	// TODO: Below this line is Windows 7 compatibility code, which hopefully we can delete at some point.
-
 	runtime.LockOSThread()
-	// This line would be fitting but is intentionally commented out:
-	//
-	//     defer runtime.UnlockOSThread()
-	//
-	// The reason is that NotifyServiceStatusChange used queued APC, which winds up messing
-	// with the thread local context, which in turn appears to corrupt Go's own usage of TLS,
-	// leading to crashes sometime later (usually in runtime_unlock()) when the thread is recycled.
-
 	const serviceNotifications = windows.SERVICE_NOTIFY_RUNNING | windows.SERVICE_NOTIFY_START_PENDING | windows.SERVICE_NOTIFY_STOP_PENDING | windows.SERVICE_NOTIFY_STOPPED | windows.SERVICE_NOTIFY_DELETE_PENDING
 	notifier := &windows.SERVICE_NOTIFY{
 		Version:        windows.SERVICE_NOTIFY_STATUS_CHANGE,
@@ -159,7 +149,6 @@ func trackService(service *mgr.Service, callback func(status uint32) bool) error
 				}
 			}
 		case windows.ERROR_SERVICE_MARKED_FOR_DELETE:
-			// Should be SERVICE_NOTIFY_DELETE_PENDING, but actually, we must release the handle and return here; otherwise it never deletes.
 			if callback(windows.SERVICE_NOTIFY_DELETED) {
 				return nil
 			}
@@ -184,7 +173,7 @@ func trackTunnelService(tunnelName string, service *mgr.Service) {
 
 	defer func() {
 		service.Close()
-		log.Printf("[%s] Tunnel service tracker finished", tunnelName)
+		log.Printf("[%s] Tunnel service tracker finished", externalTunnelName(tunnelName))
 	}()
 	trackedTunnels[tunnelName] = TunnelUnknown
 	trackedTunnelsLock.Unlock()
@@ -206,7 +195,7 @@ func trackTunnelService(tunnelName string, service *mgr.Service) {
 	checkForDisabled := func() (shouldReturn bool) {
 		config, err := service.Config()
 		if err == windows.ERROR_SERVICE_MARKED_FOR_DELETE || (err != nil && config.StartType == windows.SERVICE_DISABLED) {
-			log.Printf("[%s] Found disabled service via timeout, so deleting", tunnelName)
+			log.Printf("[%s] Found disabled service via timeout, so deleting", externalTunnelName(tunnelName))
 			service.Delete()
 			trackedTunnelsLock.Lock()
 			trackedTunnels[tunnelName] = TunnelStopped
@@ -280,7 +269,7 @@ func trackExistingTunnels() error {
 			continue
 		}
 		trackedTunnelsLock.Unlock()
-		serviceName, err := services.ServiceNameOfTunnel(name)
+		serviceName, err := serviceNameOfTunnel(name)
 		if err != nil {
 			continue
 		}
@@ -306,16 +295,12 @@ func watchNewTunnelServices() error {
 	var subscription uintptr
 	err = windows.SubscribeServiceChangeNotifications(m.Handle, windows.SC_EVENT_DATABASE_CHANGE, servicesSubscriptionWatcherCallbackPtr, 0, &subscription)
 	if err == nil {
-		// We probably could do:
-		//     defer windows.UnsubscribeServiceChangeNotifications(subscription)
-		// and then terminate after some point, but instead we just let this go forever; it's process-lived.
 		return trackExistingTunnels()
 	}
 	if !errors.Is(err, windows.ERROR_PROC_NOT_FOUND) {
 		return err
 	}
 
-	// TODO: Below this line is Windows 7 compatibility code, which hopefully we can delete at some point.
 	go func() {
 		runtime.LockOSThread()
 		notifier := &windows.SERVICE_NOTIFY{
