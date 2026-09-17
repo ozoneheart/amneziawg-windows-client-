@@ -1,10 +1,12 @@
-name: build7
+name: Build and Release
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - standalone-client
+      - master
+    tags:
+      - 'v*'
 
 jobs:
   build7:
@@ -24,6 +26,16 @@ jobs:
       - name: upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: installer artifacts
+          name: installer-artifacts
           path: installer/dist/**
           retention-days: 7
+
+      - name: create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/dist/*.msi
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
