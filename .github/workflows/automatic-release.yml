@@ -1,0 +1,64 @@
+name: Automatic Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (for example: v3.1.0)'
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Build application
+        run: build7.bat
+        shell: cmd
+
+      - name: Build installers
+        run: installer/build7.bat
+        shell: cmd
+
+      - name: Verify MSI files
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path installer/dist -Filter *.msi -File
+          if ($files.Count -eq 0) {
+            Write-Error 'No MSI files were produced.'
+            exit 1
+          }
+          $files | ForEach-Object { Write-Host "MSI: $($_.FullName) ($($_.Length) bytes)" }
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MyAmneziaWG-installers
+          path: installer/dist/*.msi
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: MyAmneziaWG ${{ github.event.inputs.tag || github.ref_name }}
+          files: installer/dist/*.msi
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          overwrite_files: true
+          draft: false
+          prerelease: false
