@@ -117,11 +117,122 @@ func NewManageTunnelsWindow() (*ManageTunnelsWindow, error) {
 		win.InsertMenuItem(systemMenu, 0, true, &win.MENUITEMINFO{
 			CbSize:     uint32(unsafe.Sizeof(win.MENUITEMINFO{})),
 			FMask:      win.MIIM_ID | win.MIIM_STRING | win.MIIM_FTYPE,
-			WID:        aboutWireGuardCmd,
+			WID:        uint32(aboutWireGuardCmd),
 			FType:      win.MFT_STRING,
-			DwTypeData: windows.StringToUTF16Ptr(l18n.Sprintf("About %s", manager.ProductName)),
+			DwTypeData: windows.StringToUTF16Ptr(l18n.Sprintf("&About %s…", manager.ProductName)),
+		})
+		win.InsertMenuItem(systemMenu, 1, true, &win.MENUITEMINFO{
+			CbSize: uint32(unsafe.Sizeof(win.MENUITEMINFO{})),
+			FMask:  win.MIIM_TYPE,
+			FType:  win.MFT_SEPARATOR,
 		})
 	}
 
+	disposables.Spare()
+
 	return mtw, nil
+}
+
+func (mtw *ManageTunnelsWindow) Dispose() {
+	if mtw.tunnelChangedCB != nil {
+		mtw.tunnelChangedCB.Unregister()
+		mtw.tunnelChangedCB = nil
+	}
+	mtw.FormBase.Dispose()
+}
+
+func (mtw *ManageTunnelsWindow) updateProgressIndicator(globalState manager.TunnelState) {
+	pi := mtw.ProgressIndicator()
+	if pi == nil {
+		return
+	}
+	switch globalState {
+	case manager.TunnelStopping, manager.TunnelStarting:
+		pi.SetState(walk.PIIndeterminate)
+	default:
+		pi.SetState(walk.PINoProgress)
+	}
+	if icon, err := iconForState(globalState, 16); err == nil {
+		if globalState == manager.TunnelStopped {
+			icon = nil
+		}
+		pi.SetOverlayIcon(icon, textForState(globalState, false))
+	}
+}
+
+func (mtw *ManageTunnelsWindow) onTunnelChange(tunnel *manager.Tunnel, state, globalState manager.TunnelState, err error) {
+	mtw.Synchronize(func() {
+		mtw.updateProgressIndicator(globalState)
+
+		if err != nil && mtw.Visible() {
+			errMsg := err.Error()
+			if len(errMsg) > 0 && errMsg[len(errMsg)-1] != '.' {
+				errMsg += "."
+			}
+			showWarningCustom(mtw, l18n.Sprintf("Tunnel Error"), l18n.Sprintf("%s\n\nPlease consult the log for more information.", errMsg))
+		}
+	})
+}
+
+func (mtw *ManageTunnelsWindow) UpdateFound() {
+	if mtw.updatePage != nil {
+		return
+	}
+	if IsAdmin {
+		mtw.SetTitle(l18n.Sprintf("%s (out of date)", mtw.Title()))
+	}
+	updatePage, err := NewUpdatePage()
+	if err == nil {
+		mtw.updatePage = updatePage
+		mtw.tabs.Pages().Add(updatePage.TabPage)
+	}
+}
+
+func (mtw *ManageTunnelsWindow) WndProc(hwnd win.HWND, msg uint32, wParam, lParam uintptr) uintptr {
+	switch msg {
+	case win.WM_QUERYENDSESSION:
+		if lParam == win.ENDSESSION_CLOSEAPP {
+			return win.TRUE
+		}
+	case win.WM_ENDSESSION:
+		if lParam == win.ENDSESSION_CLOSEAPP && wParam == 1 {
+			walk.App().Exit(198)
+		}
+	case win.WM_SYSCOMMAND:
+		if wParam == aboutWireGuardCmd {
+			onAbout(mtw)
+			return 0
+		}
+	case raiseMsg:
+		if mtw.tunnelsPage == nil || mtw.tabs == nil {
+			mtw.Synchronize(func() {
+				mtw.SendMessage(msg, wParam, lParam)
+			})
+			return 0
+		}
+		if !mtw.Visible() {
+			mtw.tunnelsPage.listView.SelectFirstActiveTunnel()
+			if mtw.tabs.Pages().Len() != 3 {
+				mtw.tabs.SetCurrentIndex(0)
+			}
+		}
+		if mtw.tabs.Pages().Len() == 3 {
+			mtw.tabs.SetCurrentIndex(2)
+		}
+		raise(mtw.Handle())
+		return 0
+	case taskbarButtonCreatedMsg:
+		ret := mtw.FormBase.WndProc(hwnd, msg, wParam, lParam)
+		go func() {
+			globalState, err := manager.IPCClientGlobalState()
+			if err == nil {
+				mtw.Synchronize(func() {
+					mtw.updateProgressIndicator(globalState)
+				})
+			}
+		}()
+		return ret
+	}
+
+	return mtw.FormBase.WndProc(hwnd, msg, wParam, lParam)
 }
