@@ -118,7 +118,7 @@
 			<Custom Action="RemoveAdapters" Before="RemoveFiles" />
 		</InstallExecuteSequence>
 
-		<CustomAction Id="LaunchApplication" HideTarget="yes" Impersonate="no" Execute="deferred" FileKey="amneziawg.exe" ExeCommand="" Return="asyncNoWait" />
+		<CustomAction Id="LaunchApplication" HideTarget="yes" Impersonate="yes" Execute="deferred" FileKey="amneziawg.exe" ExeCommand="" Return="asyncNoWait" />
 		<InstallExecuteSequence>
 			<Custom Action="LaunchApplication" Before="InstallFinalize">(&amp;WireGuardFeature = 3) AND NOT DO_NOT_LAUNCH</Custom>
 		</InstallExecuteSequence>
