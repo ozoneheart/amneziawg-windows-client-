@@ -14,8 +14,8 @@
 #include <stdbool.h>
 #include <tchar.h>
 
-#define MANAGER_SERVICE_NAME TEXT("AmneziaWGManager")
-#define TUNNEL_SERVICE_PREFIX TEXT("AmneziaWGTunnel$")
+#define MANAGER_SERVICE_NAME TEXT("MyAmneziaWGManager")
+#define TUNNEL_SERVICE_PREFIX TEXT("MyAmneziaWGTunnel$")
 
 enum log_level { LOG_LEVEL_INFO, LOG_LEVEL_WARN, LOG_LEVEL_ERR, LOG_LEVEL_MSIERR };
 
@@ -38,15 +38,15 @@ static void log_messagef(MSIHANDLE installer, enum log_level level, const TCHAR 
 
 	switch (level) {
 	case LOG_LEVEL_INFO:
-		template = TEXT("AmneziaWG: [1]");
+		template = TEXT("MyAmneziaWG: [1]");
 		type = INSTALLMESSAGE_INFO;
 		break;
 	case LOG_LEVEL_WARN:
-		template = TEXT("AmneziaWG warning: [1]");
+		template = TEXT("MyAmneziaWG warning: [1]");
 		type = INSTALLMESSAGE_INFO;
 		break;
 	case LOG_LEVEL_ERR:
-		template = TEXT("AmneziaWG error: [1]");
+		template = TEXT("MyAmneziaWG error: [1]");
 		type = INSTALLMESSAGE_ERROR;
 		break;
 	case LOG_LEVEL_MSIERR:
@@ -139,7 +139,7 @@ static UINT insert_service_control(MSIHANDLE installer, MSIHANDLE view, const TC
 	MsiRecordSetString (record, 2/*Name          */, service_name);
 	MsiRecordSetInteger(record, 3/*Event         */, msidbServiceControlEventStop | msidbServiceControlEventUninstallStop | msidbServiceControlEventUninstallDelete);
 	MsiRecordSetString (record, 4/*Component_    */, TEXT("WireGuardExecutable"));
-	MsiRecordSetInteger(record, 5/*Wait          */, 1); /* Waits 30 seconds. */
+	MsiRecordSetInteger(record, 5/*Wait          */, 1);
 	log_messagef(installer, LOG_LEVEL_INFO, TEXT("Scheduling stop on upgrade or removal on uninstall of service %1"), service_name);
 	ret = MsiViewExecute(view, record);
 	if (ret != ERROR_SUCCESS) {
@@ -157,7 +157,7 @@ static UINT insert_service_control(MSIHANDLE installer, MSIHANDLE view, const TC
 	MsiRecordSetString (record, 2/*Name          */, service_name);
 	MsiRecordSetInteger(record, 3/*Event         */, msidbServiceControlEventStart);
 	MsiRecordSetString (record, 4/*Component_    */, TEXT("WireGuardExecutable"));
-	MsiRecordSetInteger(record, 5/*Wait          */, 0); /* No wait, so that failure to restart again isn't fatal. */
+	MsiRecordSetInteger(record, 5/*Wait          */, 0);
 	log_messagef(installer, LOG_LEVEL_INFO, TEXT("Scheduling start on upgrade of service %1"), service_name);
 	ret = MsiViewExecute(view, record);
 	if (ret != ERROR_SUCCESS) {
@@ -289,14 +289,12 @@ __declspec(dllexport) UINT __stdcall EvaluateWireGuardComponents(MSIHANDLE insta
 	}
 
 	if (component_action >= INSTALLSTATE_LOCAL) {
-		/* WireGuardExecutable component shall be installed. */
 		ret = MsiSetProperty(installer, TEXT("KillWireGuardProcesses"), path);
 		if (ret != ERROR_SUCCESS) {
 			log_errorf(installer, LOG_LEVEL_ERR, ret, TEXT("MsiSetProperty(\"KillWireGuardProcesses\") failed"));
 			goto out;
 		}
 	} else if (component_action >= INSTALLSTATE_REMOVED) {
-		/* WireGuardExecutable component shall be uninstalled. */
 		ret = MsiSetProperty(installer, TEXT("KillWireGuardProcesses"), path);
 		if (ret != ERROR_SUCCESS) {
 			log_errorf(installer, LOG_LEVEL_ERR, ret, TEXT("MsiSetProperty(\"KillWireGuardProcesses\") failed"));
@@ -480,7 +478,7 @@ __declspec(dllexport) UINT __stdcall RemoveConfigFolder(MSIHANDLE installer)
 	if (!path[0] || !PathAppend(path, TEXT("Data")))
 		goto out;
 	remove_directory_recursive(installer, path, 10);
-	RegDeleteKey(HKEY_LOCAL_MACHINE, TEXT("Software\\AmneziaWG")); // Assumes no WOW.
+	RegDeleteKey(HKEY_LOCAL_MACHINE, TEXT("Software\\MyAmneziaWG"));
 out:
 	if (is_com_initialized)
 		CoUninitialize();
