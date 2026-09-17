@@ -43,7 +43,7 @@ if exist .deps\prepared goto :build
 	if "%SigningProvider%"=="" goto :success
 	if "%TimestampServer%"=="" goto :success
 	echo [+] Signing
-	signtool sign %SigningProvider% /fd sha256 /tr "%TimestampServer%" /td sha256 /d "MyAmneziaWG Setup" "dist\myamneziawg-*-windows7-%WIREGUARD_VERSION%.msi" || goto :error
+	signtool sign %SigningProvider% /fd sha256 /tr "%TimestampServer%" /td sha256 /d "MyAmneziaWG Setup" "dist\myamneziawg-*-%WIREGUARD_VERSION%.msi" || goto :error
 
 :success
 	echo [+] Success.
@@ -68,7 +68,7 @@ if exist .deps\prepared goto :build
 :skipsign
 	"%WIX%bin\candle" %WIX_CANDLE_FLAGS% -dWIREGUARD_PLATFORM="%~1" -out "%~1\wireguard.wixobj" -arch %3 wireguard.wxs || exit /b %errorlevel%
 	echo [+] Linking %1
-	"%WIX%bin\light" %WIX_LIGHT_FLAGS% -out "dist\myamneziawg-%~1-windows7-%WIREGUARD_VERSION%.msi" "%~1\wireguard.wixobj" || exit /b %errorlevel%
+	"%WIX%bin\light" %WIX_LIGHT_FLAGS% -out "dist\myamneziawg-%~1-%WIREGUARD_VERSION%.msi" "%~1\wireguard.wixobj" || exit /b %errorlevel%
 	goto :eof
 
 :error
