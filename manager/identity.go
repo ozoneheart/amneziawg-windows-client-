@@ -9,16 +9,19 @@ import (
     "errors"
     "strings"
 
+    "golang.org/x/sys/windows/registry"
+
     "github.com/amnezia-vpn/amneziawg-windows/v3/conf"
 )
 
 const (
     ProductName = "MyAmneziaWG"
 
-    ManagerServiceName = "MyAmneziaWGManager"
+    ManagerServiceName  = "MyAmneziaWGManager"
     TunnelServicePrefix = "MyAmneziaWGTunnel$"
 
     tunnelNamePrefix = "MyAmneziaWG-"
+    adminRegKey      = `Software\MyAmneziaWG`
 )
 
 func internalTunnelName(name string) string {
@@ -38,4 +41,14 @@ func serviceNameOfTunnel(name string) (string, error) {
         return "", errors.New("Tunnel name is not valid")
     }
     return TunnelServicePrefix + name, nil
+}
+
+func adminBool(name string) bool {
+    key, err := registry.OpenKey(registry.LOCAL_MACHINE, adminRegKey, registry.QUERY_VALUE|registry.WOW64_64KEY)
+    if err != nil {
+        return false
+    }
+    defer key.Close()
+    value, _, err := key.GetIntegerValue(name)
+    return err == nil && value != 0
 }
